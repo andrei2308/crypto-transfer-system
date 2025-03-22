@@ -9,9 +9,9 @@ import {Configuration} from "./Configuration.sol";
 contract DeployExchange is Script {
     function run() external returns (Exchange) {
         Configuration configuration = new Configuration();
-        address eurUsdPriceFeed = configuration.activeChainConfiguration();
+        (address eurUsdPriceFeed, address eurcToken, address usdtToken) = configuration.activeChainConfiguration();
         vm.startBroadcast();
-        Exchange exchange = new Exchange(eurUsdPriceFeed);
+        Exchange exchange = new Exchange(eurUsdPriceFeed, eurcToken, usdtToken);
         vm.stopBroadcast();
         return exchange;
     }
