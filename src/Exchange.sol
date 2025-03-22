@@ -6,15 +6,15 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
 
 //price feed chainlink eur/usd : 0x1a81afB8146aeFfCFc5E50e8479e826E7D55b910
 
-contract Exchange{
+contract Exchange {
     AggregatorV3Interface internal priceFeed;
 
-    constructor(address _priceFeedAddress){
+    constructor(address _priceFeedAddress) {
         priceFeed = AggregatorV3Interface(_priceFeedAddress);
     }
 
-    function getLatestPrice() public view returns (int){
-        (,int price,,,) = priceFeed.latestRoundData();
+    function getLatestPrice() public view returns (int256) {
+        (, int256 price,,,) = priceFeed.latestRoundData();
         return price;
     }
 }
