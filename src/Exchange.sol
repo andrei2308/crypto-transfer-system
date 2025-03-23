@@ -78,4 +78,12 @@ contract Exchange {
     function getUsdtAddress() public view returns (address) {
         return address(usdToken);
     }
+
+    function getContractEurcBalance(address eurcToken) public view returns (uint256) {
+        return IERC20(eurcToken).balanceOf(address(this));
+    }
+
+    function getContractUsdtBalance(address usdtToken) public view returns (uint256) {
+        return IERC20(usdtToken).balanceOf(address(this));
+    }
 }
