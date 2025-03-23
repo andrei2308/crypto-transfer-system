@@ -1,0 +1,3 @@
+ExchangeTest:testExchangeEurToUsd() (gas: 103668)
+ExchangeTest:testPriceFeedReturnsDecimals() (gas: 16549)
+ExchangeTest:testPriceFeedReturnsPrice() (gas: 24596)
