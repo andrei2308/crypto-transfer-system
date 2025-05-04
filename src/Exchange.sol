@@ -2,20 +2,19 @@
 
 pragma solidity ^0.8.18;
 
-import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-//price feed chainlink eur/usd : 0x1a81afB8146aeFfCFc5E50e8479e826E7D55b910
 
 contract Exchange is ReentrancyGuard {
-    AggregatorV3Interface internal priceFeed;
     IERC20 public euroToken; // address on sepolia : 0x08210F9170F89Ab7658F0B5E3fF39b0E03C594D4 - 6 decimals
-    IERC20 public usdToken; // address on sepolia : 0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0 - 6 decimals
+    IERC20 public usdToken; // address on sepolia : 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238 - 6 decimals
     address owner;
+    int256 exchangeRateEurToUsd;
 
     //CONSTANTS
     uint8 public constant EUR = 1;
     uint8 public constant USD = 2;
+    uint8 public constant decimals = 8;
 
     //ERRORS
     error InsufficientAmount();
@@ -44,8 +43,7 @@ contract Exchange is ReentrancyGuard {
         int256 exchangeRate
     );
 
-    constructor(address _priceFeedAddress, address _euroTokenAddress, address _usdTokenAddress) {
-        priceFeed = AggregatorV3Interface(_priceFeedAddress);
+    constructor(address _euroTokenAddress, address _usdTokenAddress) {
         euroToken = IERC20(_euroTokenAddress);
         usdToken = IERC20(_usdTokenAddress);
         owner = msg.sender;
@@ -56,19 +54,10 @@ contract Exchange is ReentrancyGuard {
         _;
     }
 
-    function getLatestPrice() public view returns (int256) {
-        (, int256 price,,,) = priceFeed.latestRoundData();
-        return price;
-    }
-
-    function getDecimals() public view returns (uint8) {
-        return priceFeed.decimals();
-    }
-
     function exchangeEurToUsd(uint256 amountInEur) public nonReentrant returns (uint256) {
         if (amountInEur == 0) revert InsufficientAmount();
 
-        int256 exchangeRate = getLatestPrice();
+        int256 exchangeRate = getExchangeRate();
         if (exchangeRate <= 0) revert InvalidExchangeRate();
 
         uint256 usdAmount = (amountInEur * uint256(exchangeRate)) / 10 ** getDecimals();
@@ -86,7 +75,7 @@ contract Exchange is ReentrancyGuard {
     function exchangeUsdToEur(uint256 amountInUsd) public nonReentrant returns (uint256) {
         if (amountInUsd == 0) revert InsufficientAmount();
 
-        int256 exchangeRate = getLatestPrice();
+        int256 exchangeRate = getExchangeRate();
         if (exchangeRate <= 0) revert InvalidExchangeRate();
 
         uint256 eurAmount = (amountInUsd * 10 ** getDecimals()) / uint256(exchangeRate);
@@ -111,7 +100,7 @@ contract Exchange is ReentrancyGuard {
         if (receiveCurrency != EUR && receiveCurrency != USD) revert InvalidCurrency();
 
         uint256 receiveAmount;
-        int256 exchangeRate = getLatestPrice();
+        int256 exchangeRate = getExchangeRate();
         if (exchangeRate <= 0) revert InvalidExchangeRate();
 
         if (sendCurrency == receiveCurrency) {
@@ -149,8 +138,7 @@ contract Exchange is ReentrancyGuard {
     }
 
     // onlyOwner
-    function addLiquidity(address token, uint256 amount) external {
-        // !!! only owner ??
+    function addLiquidity(address token, uint256 amount) external onlyOwner {
         require(token == address(euroToken) || token == address(usdToken), "Invalid token");
         require(amount > 0, "Amount must be greater than 0");
 
@@ -172,5 +160,17 @@ contract Exchange is ReentrancyGuard {
 
     function getContractUsdtBalance(address usdtToken) public view returns (uint256) {
         return IERC20(usdtToken).balanceOf(address(this));
+    }
+
+    function getExchangeRate() public view returns (int256) {
+        return exchangeRateEurToUsd;
+    }
+
+    function setExchangeRate(int256 exchangeRate) public {
+        exchangeRateEurToUsd = exchangeRate;
+    }
+
+    function getDecimals() public pure returns (uint8) {
+        return decimals;
     }
 }

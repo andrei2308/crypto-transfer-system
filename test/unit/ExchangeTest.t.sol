@@ -45,6 +45,8 @@ contract ExchangeTest is Test {
         exchange.addLiquidity(address(eurc), INITIAL_LIQUIDITY_EURC);
         exchange.addLiquidity(address(usdt), INITIAL_LIQUIDITY_USDT);
 
+        exchange.setExchangeRate(1.1e8);
+
         vm.stopPrank();
         vm.deal(user, USER_EURC_BALANCE);
         vm.deal(user, USER_USDT_BALANCE);
@@ -54,10 +56,6 @@ contract ExchangeTest is Test {
         usdt.mint(user, USER_USDT_BALANCE);
 
         vm.stopPrank();
-    }
-
-    function testPriceFeedReturnsPrice() public view {
-        assertEq(1.1e8, exchange.getLatestPrice());
     }
 
     function testPriceFeedReturnsDecimals() public view {
