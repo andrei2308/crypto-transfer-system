@@ -138,7 +138,7 @@ contract Exchange is ReentrancyGuard {
     }
 
     // onlyOwner
-    function addLiquidity(address token, uint256 amount) external onlyOwner {
+    function addLiquidity(address token, uint256 amount) external {
         require(token == address(euroToken) || token == address(usdToken), "Invalid token");
         require(amount > 0, "Amount must be greater than 0");
 
