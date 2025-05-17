@@ -4,12 +4,17 @@ pragma solidity ^0.8.18;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {UsdERC20} from "./UsdERC20.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
 contract Exchange is ReentrancyGuard {
-    IERC20 public euroToken; // address on sepolia : 0x08210F9170F89Ab7658F0B5E3fF39b0E03C594D4 - 6 decimals
-    IERC20 public usdToken; // address on sepolia : 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238 - 6 decimals
+    IERC20 public euroToken;
+    UsdERC20 public usdToken;
     address owner;
     int256 exchangeRateEurToUsd;
+
+    // Chainlink price feed for ETH/USD
+    AggregatorV3Interface public ethUsdPriceFeed;
 
     //CONSTANTS
     uint8 public constant EUR = 1;
@@ -23,6 +28,9 @@ contract Exchange is ReentrancyGuard {
     error Unauthorized();
     error InvalidToken();
     error InvalidCurrency();
+    error InsufficientEthProvided();
+    error RefundFailed();
+    error ChainlinkError();
 
     //EVENTS
     event ExchangeCompleted(
@@ -42,10 +50,13 @@ contract Exchange is ReentrancyGuard {
         uint8 receiveCurrency,
         int256 exchangeRate
     );
+    event LiquidityAdded(address token, uint256 amount);
+    event UsdTokensMinted(address indexed to, uint256 amount, uint256 ethPaid);
 
-    constructor(address _euroTokenAddress, address _usdTokenAddress) {
+    constructor(address _euroTokenAddress, address _usdTokenAddress, address _ethUsdPriceFeedAddress) {
         euroToken = IERC20(_euroTokenAddress);
-        usdToken = IERC20(_usdTokenAddress);
+        usdToken = UsdERC20(_usdTokenAddress);
+        ethUsdPriceFeed = AggregatorV3Interface(_ethUsdPriceFeedAddress);
         owner = msg.sender;
     }
 
@@ -143,6 +154,46 @@ contract Exchange is ReentrancyGuard {
         require(amount > 0, "Amount must be greater than 0");
 
         IERC20(token).transferFrom(msg.sender, address(this), amount);
+
+        emit LiquidityAdded(token, amount);
+    }
+
+    function mintUsdTokens(uint256 usdAmount) external payable nonReentrant {
+        if (usdAmount == 0) revert InsufficientAmount();
+        (
+            /* uint80 roundID */
+            ,
+            int256 price,
+            /*uint startedAt*/
+            ,
+            /*uint timeStamp*/
+            ,
+            /*uint80 answeredInRound*/
+        ) = ethUsdPriceFeed.latestRoundData();
+
+        if (price <= 0) revert ChainlinkError();
+
+        uint256 requiredEthAmount = (usdAmount * 1e20) / uint256(price);
+
+        if (msg.value < requiredEthAmount) revert InsufficientEthProvided();
+
+        usdToken.mint(msg.sender, usdAmount);
+
+        uint256 excessEth = msg.value - requiredEthAmount;
+        if (excessEth > 0) {
+            (bool success,) = payable(msg.sender).call{value: excessEth}("");
+            if (!success) revert RefundFailed();
+        }
+
+        emit UsdTokensMinted(msg.sender, usdAmount, requiredEthAmount);
+    }
+
+    function withdrawEth() external onlyOwner {
+        uint256 balance = address(this).balance;
+        if (balance > 0) {
+            (bool success,) = payable(owner).call{value: balance}("");
+            require(success, "ETH withdrawal failed");
+        }
     }
 
     //getters
@@ -170,7 +221,45 @@ contract Exchange is ReentrancyGuard {
         exchangeRateEurToUsd = exchangeRate;
     }
 
+    function getEthUsdPrice() public view returns (int256) {
+        (
+            /* uint80 roundID */
+            ,
+            int256 price,
+            /*uint startedAt*/
+            ,
+            /*uint timeStamp*/
+            ,
+            /*uint80 answeredInRound*/
+        ) = ethUsdPriceFeed.latestRoundData();
+
+        return price;
+    }
+
     function getDecimals() public pure returns (uint8) {
         return decimals;
     }
+
+    function getRequiredEthForUsd(uint256 usdAmount) public view returns (uint256) {
+        if (usdAmount == 0) return 0;
+
+        (
+            /* uint80 roundID */
+            ,
+            int256 price,
+            /*uint startedAt*/
+            ,
+            /*uint timeStamp*/
+            ,
+            /*uint80 answeredInRound*/
+        ) = ethUsdPriceFeed.latestRoundData();
+
+        if (price <= 0) revert ChainlinkError();
+
+        uint256 requiredEthAmount = (usdAmount * 1e20) / uint256(price);
+
+        return requiredEthAmount;
+    }
+
+    receive() external payable {}
 }
