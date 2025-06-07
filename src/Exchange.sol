@@ -97,7 +97,7 @@ contract Exchange is ReentrancyGuard {
         success = euroToken.transfer(msg.sender, eurAmount);
         if (!success) revert TransferFailed();
 
-        emit ExchangeCompleted(msg.sender, amountInUsd, eurAmount, USD, EUR, exchangeRate);
+        emit ExchangeCompleted(msg.sender, amountInUsd, eurAmount, USD, EUR, 10 ** 8 * 10 ** 8 / exchangeRate);
         return eurAmount;
     }
 
@@ -119,10 +119,14 @@ contract Exchange is ReentrancyGuard {
                 bool success = euroToken.transferFrom(msg.sender, to, amount);
                 if (!success) revert TransferFailed();
                 receiveAmount = amount;
+                emit MoneySent(msg.sender, to, amount, receiveAmount, sendCurrency, receiveCurrency, 100000000);
+                return receiveAmount;
             } else if (sendCurrency == USD) {
                 bool success = usdToken.transferFrom(msg.sender, to, amount);
                 if (!success) revert TransferFailed();
                 receiveAmount = amount;
+                emit MoneySent(msg.sender, to, amount, receiveAmount, sendCurrency, receiveCurrency, 100000000);
+                return receiveAmount;
             }
         } else {
             if (sendCurrency == EUR && receiveCurrency == USD) {
@@ -133,6 +137,8 @@ contract Exchange is ReentrancyGuard {
 
                 success = usdToken.transfer(to, receiveAmount);
                 if (!success) revert TransferFailed();
+                emit MoneySent(msg.sender, to, amount, receiveAmount, sendCurrency, receiveCurrency, exchangeRate);
+                return receiveAmount;
             } else if (sendCurrency == USD && receiveCurrency == EUR) {
                 receiveAmount = (amount * 10 ** getDecimals()) / uint256(exchangeRate);
 
@@ -141,6 +147,16 @@ contract Exchange is ReentrancyGuard {
 
                 success = euroToken.transfer(to, receiveAmount);
                 if (!success) revert TransferFailed();
+                emit MoneySent(
+                    msg.sender,
+                    to,
+                    amount,
+                    receiveAmount,
+                    sendCurrency,
+                    receiveCurrency,
+                    10 ** 8 * 10 ** 8 / exchangeRate
+                );
+                return receiveAmount;
             }
         }
 
@@ -217,7 +233,7 @@ contract Exchange is ReentrancyGuard {
         return exchangeRateEurToUsd;
     }
 
-    function setExchangeRate(int256 exchangeRate) public {
+    function setExchangeRate(int256 exchangeRate) public onlyOwner {
         exchangeRateEurToUsd = exchangeRate;
     }
 
@@ -263,3 +279,5 @@ contract Exchange is ReentrancyGuard {
 
     receive() external payable {}
 }
+
+// Avantaje fata de PSD 2.
