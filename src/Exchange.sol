@@ -6,11 +6,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {UsdERC20} from "./UsdERC20.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Exchange is ReentrancyGuard {
+contract Exchange is ReentrancyGuard, Ownable {
     IERC20 public euroToken;
     UsdERC20 public usdToken;
-    address owner;
     int256 exchangeRateEurToUsd;
 
     // Chainlink price feed for ETH/USD
@@ -53,16 +53,12 @@ contract Exchange is ReentrancyGuard {
     event LiquidityAdded(address token, uint256 amount);
     event UsdTokensMinted(address indexed to, uint256 amount, uint256 ethPaid);
 
-    constructor(address _euroTokenAddress, address _usdTokenAddress, address _ethUsdPriceFeedAddress) {
+    constructor(address _euroTokenAddress, address _usdTokenAddress, address _ethUsdPriceFeedAddress)
+        Ownable(msg.sender)
+    {
         euroToken = IERC20(_euroTokenAddress);
         usdToken = UsdERC20(_usdTokenAddress);
         ethUsdPriceFeed = AggregatorV3Interface(_ethUsdPriceFeedAddress);
-        owner = msg.sender;
-    }
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Not the contract owner");
-        _;
     }
 
     function exchangeEurToUsd(uint256 amountInEur) public nonReentrant returns (uint256) {
@@ -104,13 +100,12 @@ contract Exchange is ReentrancyGuard {
     function sendMoney(uint256 amount, address to, uint8 sendCurrency, uint8 receiveCurrency)
         public
         nonReentrant
-        returns (uint256)
+        returns (uint256 receiveAmount)
     {
         if (amount == 0) revert InsufficientAmount();
         if (sendCurrency != EUR && sendCurrency != USD) revert InvalidCurrency();
         if (receiveCurrency != EUR && receiveCurrency != USD) revert InvalidCurrency();
 
-        uint256 receiveAmount;
         int256 exchangeRate = getExchangeRate();
         if (exchangeRate <= 0) revert InvalidExchangeRate();
 
@@ -159,9 +154,6 @@ contract Exchange is ReentrancyGuard {
                 return receiveAmount;
             }
         }
-
-        emit MoneySent(msg.sender, to, amount, receiveAmount, sendCurrency, receiveCurrency, exchangeRate);
-        return receiveAmount;
     }
 
     // onlyOwner
@@ -207,7 +199,7 @@ contract Exchange is ReentrancyGuard {
     function withdrawEth() external onlyOwner {
         uint256 balance = address(this).balance;
         if (balance > 0) {
-            (bool success,) = payable(owner).call{value: balance}("");
+            (bool success,) = payable(msg.sender).call{value: balance}("");
             require(success, "ETH withdrawal failed");
         }
     }
